@@ -68,17 +68,6 @@ export interface ParseResponse {
   };
 }
 
-/** Response from MediaWiki allcategories API */
-export interface AllCategoriesResponse {
-  query?: {
-    allcategories: Array<{ "*": string }>;
-  };
-  continue?: {
-    accontinue: string;
-    continue: string;
-  };
-}
-
 /** Response from MediaWiki page revisions API (for last_modified) */
 export interface RevisionsResponse {
   query?: {

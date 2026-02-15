@@ -20,6 +20,7 @@ const DEFAULT_DB_PATH = path.join(__dirname, "..", "..", "data", "wiki.db");
 
 export class WikiDatabase {
   private db: Database.Database;
+  private upsertStmt: Database.Statement;
 
   constructor(dbPath?: string) {
     const resolvedPath = dbPath ?? DEFAULT_DB_PATH;
@@ -30,6 +31,17 @@ export class WikiDatabase {
     this.db.pragma("foreign_keys = ON");
 
     this.initialize();
+
+    this.upsertStmt = this.db.prepare(`
+      INSERT INTO pages (title, content, url, categories, last_modified, scraped_at)
+      VALUES (@title, @content, @url, @categories, @last_modified, datetime('now'))
+      ON CONFLICT(title) DO UPDATE SET
+        content = @content,
+        url = @url,
+        categories = @categories,
+        last_modified = @last_modified,
+        scraped_at = datetime('now')
+    `);
   }
 
   /**
@@ -94,53 +106,32 @@ export class WikiDatabase {
   }
 
   /**
-   * Insert or update a wiki page.
+   * Prepare the bind params for a page upsert.
    */
-  upsertPage(page: PageData): void {
-    const stmt = this.db.prepare(`
-      INSERT INTO pages (title, content, url, categories, last_modified, scraped_at)
-      VALUES (@title, @content, @url, @categories, @last_modified, datetime('now'))
-      ON CONFLICT(title) DO UPDATE SET
-        content = @content,
-        url = @url,
-        categories = @categories,
-        last_modified = @last_modified,
-        scraped_at = datetime('now')
-    `);
-
-    stmt.run({
+  private toUpsertParams(page: PageData) {
+    return {
       title: page.title,
       content: page.content,
       url: page.url,
       categories: JSON.stringify(page.categories),
       last_modified: page.last_modified,
-    });
+    };
+  }
+
+  /**
+   * Insert or update a wiki page.
+   */
+  upsertPage(page: PageData): void {
+    this.upsertStmt.run(this.toUpsertParams(page));
   }
 
   /**
    * Batch insert/update multiple pages within a transaction.
    */
   upsertPages(pages: PageData[]): void {
-    const stmt = this.db.prepare(`
-      INSERT INTO pages (title, content, url, categories, last_modified, scraped_at)
-      VALUES (@title, @content, @url, @categories, @last_modified, datetime('now'))
-      ON CONFLICT(title) DO UPDATE SET
-        content = @content,
-        url = @url,
-        categories = @categories,
-        last_modified = @last_modified,
-        scraped_at = datetime('now')
-    `);
-
     const transaction = this.db.transaction((pages: PageData[]) => {
       for (const page of pages) {
-        stmt.run({
-          title: page.title,
-          content: page.content,
-          url: page.url,
-          categories: JSON.stringify(page.categories),
-          last_modified: page.last_modified,
-        });
+        this.upsertStmt.run(this.toUpsertParams(page));
       }
     });
 
@@ -149,11 +140,14 @@ export class WikiDatabase {
 
   /**
    * Search wiki pages using FTS5 full-text search.
-   * Boosts title matches by searching title and content separately.
+   * Uses bm25 with 10x title weight to boost title matches.
    */
   searchPages(query: string, limit: number = 5): SearchResult[] {
+    // Cap query length to prevent abuse
+    const trimmedQuery = query.slice(0, 500);
+
     // Sanitize the query for FTS5
-    const ftsQuery = sanitizeFtsQuery(query);
+    const ftsQuery = sanitizeFtsQuery(trimmedQuery);
 
     if (!ftsQuery) {
       return [];
@@ -257,17 +251,19 @@ export class WikiDatabase {
    * Get all page titles in a specific category.
    */
   getPagesByCategory(category: string): string[] {
-    // Search for pages where the categories JSON array contains the category
+    // Use instr() for exact substring matching instead of LIKE with interpolation.
+    // This avoids any LIKE pattern injection and matches the JSON-encoded category name.
     const stmt = this.db.prepare(`
       SELECT title FROM pages
-      WHERE categories LIKE @pattern
+      WHERE instr(categories, @needle) > 0
       ORDER BY title
     `);
 
-    // Use JSON-aware matching
-    const rows = stmt.all({
-      pattern: `%"${category.replace(/["%_\\]/g, "")}"%`,
-    }) as Array<{ title: string }>;
+    // Build the exact JSON-encoded needle: "CategoryName"
+    // JSON.stringify handles all necessary escaping
+    const needle = JSON.stringify(category);
+
+    const rows = stmt.all({ needle }) as Array<{ title: string }>;
 
     return rows.map((r) => r.title);
   }

@@ -13,6 +13,18 @@ import { WikiDatabase } from "./database.js";
 // Initialize the database (auto-creates schema on first run)
 const db = new WikiDatabase();
 
+/**
+ * Return a safe error message for tool responses.
+ * Avoids leaking internal details like file paths or SQL errors.
+ */
+function safeErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    // Strip file paths from the message
+    return error.message.replace(/\/[^\s:]+\//g, "");
+  }
+  return "An unexpected error occurred.";
+}
+
 const server = new McpServer({
   name: "sneaky-sasquatch-wiki",
   version: "1.0.0",
@@ -25,6 +37,7 @@ server.tool(
   {
     query: z
       .string()
+      .max(500)
       .describe(
         'The search query (e.g., "how to make money", "fishing rod location")'
       ),
@@ -72,7 +85,7 @@ server.tool(
         content: [
           {
             type: "text" as const,
-            text: `Search error: ${error instanceof Error ? error.message : String(error)}`,
+            text: `Search error: ${safeErrorMessage(error)}`,
           },
         ],
         isError: true,
@@ -88,6 +101,7 @@ server.tool(
   {
     title: z
       .string()
+      .max(300)
       .describe(
         'The exact page title (e.g., "Fishing", "Making money", "Storyline")'
       ),
@@ -135,7 +149,7 @@ server.tool(
         content: [
           {
             type: "text" as const,
-            text: `Error fetching page: ${error instanceof Error ? error.message : String(error)}`,
+            text: `Error fetching page: ${safeErrorMessage(error)}`,
           },
         ],
         isError: true,
@@ -177,7 +191,7 @@ server.tool(
         content: [
           {
             type: "text" as const,
-            text: `Error listing categories: ${error instanceof Error ? error.message : String(error)}`,
+            text: `Error listing categories: ${safeErrorMessage(error)}`,
           },
         ],
         isError: true,
@@ -193,6 +207,7 @@ server.tool(
   {
     category: z
       .string()
+      .max(300)
       .describe(
         'Category name (e.g., "Food", "Characters", "Locations")'
       ),
@@ -242,7 +257,7 @@ server.tool(
         content: [
           {
             type: "text" as const,
-            text: `Error fetching category pages: ${error instanceof Error ? error.message : String(error)}`,
+            text: `Error fetching category pages: ${safeErrorMessage(error)}`,
           },
         ],
         isError: true,
