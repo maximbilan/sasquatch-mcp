@@ -17,7 +17,7 @@ import type {
 const BASE_URL = "https://sneaky-sasquatch.fandom.com/api.php";
 const WIKI_BASE = "https://sneaky-sasquatch.fandom.com/wiki/";
 const USER_AGENT =
-  "SneakySasquatchMCP/1.0 (MCP Wiki Server; https://github.com/sneaky-sasquatch-mcp)";
+  "SneakySasquatchMCP/1.0 (MCP Wiki Server; Node.js)";
 const RATE_LIMIT_MS = 250; // 250ms between requests
 
 /**
