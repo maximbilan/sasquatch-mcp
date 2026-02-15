@@ -164,11 +164,11 @@ export class WikiDatabase {
         p.title,
         snippet(pages_fts, 1, '**', '**', '...', 50) as snippet,
         p.url,
-        (rank * -1) as relevance_score
+        (bm25(pages_fts, 10.0, 1.0) * -1) as relevance_score
       FROM pages_fts
       JOIN pages p ON p.id = pages_fts.rowid
       WHERE pages_fts MATCH @query
-      ORDER BY rank
+      ORDER BY bm25(pages_fts, 10.0, 1.0)
       LIMIT @limit
     `);
 
@@ -324,10 +324,10 @@ function sanitizeFtsQuery(query: string): string {
 
   if (tokens.length === 0) return "";
 
-  // Use implicit AND by quoting each token
-  // Boost title matches by weighting: {title content} with title getting 10x weight
-  const quoted = tokens.map((t) => `"${t}"`).join(" ");
+  // Use prefix matching (token*) so partial words match (e.g. "fish" matches "fishing").
+  // Multiple tokens use implicit AND.
+  const prefixed = tokens.map((t) => `"${t}"*`).join(" ");
 
-  // FTS5 column weighting: title matches are boosted
-  return `{title content} : ${quoted}`;
+  // FTS5 column filter: search both title and content
+  return `{title content} : ${prefixed}`;
 }
