@@ -31,14 +31,16 @@ Add this to your `claude_desktop_config.json`:
 {
   "mcpServers": {
     "sneaky-sasquatch-wiki": {
-      "command": "node",
+      "command": "/absolute/path/to/node",
       "args": ["/absolute/path/to/sneaky-sasquatch-mcp/dist/src/index.js"]
     }
   }
 }
 ```
 
-Replace the path with the actual absolute path to this project's `dist/src/index.js`.
+Replace both paths with actual absolute paths on your system. You can find your `node` binary with `which node` (e.g. `/opt/homebrew/bin/node` on macOS with Homebrew).
+
+**Important:** Use the full absolute path to `node`, not just `"node"`. Claude Desktop does not inherit your shell's `PATH`, so a bare `node` command will fail to resolve.
 
 Then restart Claude Desktop. The wiki tools will be available automatically.
 
